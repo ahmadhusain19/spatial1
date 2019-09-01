@@ -1,0 +1,50 @@
+library(readxl)
+data_abs_2017 <- read_excel("data_abs_2017.xlsx")
+data_abs_2017_coord <- read_excel("data_abs_2017.xlsx",sheet = "Sheet2")
+summary(data_abs_2017)
+
+library(gwrr)
+library(GWmodel)
+library(spdep)
+library(lmtest)
+
+Y=data_abs_2017$Y
+X1=data_abs_2017$X1
+X2=data_abs_2017$X2
+X3=data_abs_2017$X3
+X4=data_abs_2017$X4
+X5=data_abs_2017$X5
+X6=data_abs_2017$X6
+X7=data_abs_2017$X7
+U=data_abs_2017_coord$U
+V=data_abs_2017_coord$V
+coords=as.matrix(cbind(U,V))
+
+reg<-lm(Y~X1+X2+X3+X4+X5+X6+X7)
+
+#heteroginitas spasial
+bptest(reg)
+
+#penskalaan data
+data.m=as.matrix(data_abs_2017)
+data.s=scale(data.m)
+data.spdf=SpatialPointsDataFrame(coord,as.data.frame(data.s))
+bw.e.bis<-bw.gwr(Y~X1+X2+X3+X4+X5+X6+X7, data=data.spdf,approach = "CV", kernel="bisquare", adaptive=FALSE,p=2,longlat=FALSE)
+
+#matrix pembobot
+library(fields)
+dii=rdist(coords)
+
+#replace dii >2.60013 (bw optimum)  = 0
+dii_n= ifelse(dii>2.6013,0,dii)
+
+W=exp(1-(dii_n/bw.e.bis)^2)^2
+
+#parameter estimation using w basic
+gwrModel.bisq=gwr.basic(Y~X1+X2+X3+X4+X5+X6+X7, data=data.spdf,bw=bw.e.bis,kernel="bisquare", adaptive=FALSE,p=2,F123.test=T)
+
+#VIF local
+diag.gwr.e.bisq=gwr.collin.diagno(Y~X1+X2+X3+X4+X5+X6+X7,data=data.spdf,bw=bw.e.bis,kernel = "bisquare",adaptive = FALSE,p=2,theta=0)
+names(diag.gwr.e.bisq)
+vif_local_sumary=diag.gwr.e.bisq$VIF
+summary(vif_local_sumary)
